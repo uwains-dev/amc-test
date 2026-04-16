@@ -3,59 +3,802 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GitHub Pages × GAS 連携テスト</title>
+  <title>AMC生産管理 検査用 (SPA)</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; padding: 50px; background: #f4f7f6; }
-    button { padding: 15px 30px; font-size: 18px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    button:active { background: #2980b9; }
-    #result { margin-top: 20px; font-weight: bold; color: #e74c3c; font-size: 1.2rem; }
+    :root { --primary: #3498db; --success: #2ecc71; --warning: #f1c40f; --danger: #e74c3c; --dark: #2c3e50; }
+    body { font-family: sans-serif; margin: 0; background: #f4f7f6; font-size: 14px; color: var(--dark); }
+    .header-container { display: flex; justify-content: space-between; align-items: center; background: white; padding: 5px 10px; border-bottom: 3px solid var(--primary); position: sticky; top:0; z-index:100; height: 60px; }
+    .logo { height: 50px; width: auto; }
+    h2 { font-size: 1rem; margin: 0; }
+    
+    .nav-tabs { display: flex; background: #333; position: sticky; top: 63px; z-index: 90; }
+    .nav-item { flex: 1; color: white; text-align: center; padding: 12px; cursor: pointer; font-weight: bold; border-bottom: 4px solid transparent; }
+    .nav-item.active { border-bottom-color: var(--primary); background: #444; }
+
+    .content { padding: 10px; display: none; }
+    .content.active { display: block; }
+    
+    .card { background: white; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid var(--primary); }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 5px; font-weight: bold; font-size: 1rem; cursor: pointer; margin-bottom: 10px; color: white; transition: 0.2s; }
+    .btn:active { opacity: 0.7; transform: scale(0.98); }
+    .btn-new { background: var(--primary); }
+    .btn-common { background: #95a5a6; }
+    .btn-pause { background: var(--warning); color: #333; }
+    .btn-complete { background: #9b59b6; }
+    .btn-retry { background: var(--danger); }
+    
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .active-info { display: flex; flex-direction: column; gap: 6px; font-size: 1rem; margin-bottom: 12px; }
+    .status-badge { background: #f0f3f5; padding: 8px; text-align: center; border-radius: 4px; font-weight: bold; color: var(--primary); white-space: pre-wrap; font-size: 1.1rem; border: 1px solid #dcdfe3; }
+    
+    .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; }
+    .modal-content { background: white; width: 95%; max-height: 90vh; overflow-y: auto; padding: 15px; border-radius: 10px; box-sizing: border-box; }
+    input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; box-sizing: border-box; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    
+    .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+    .check-item { display: flex; align-items: center; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #eee; }
+    .check-item input { width: auto; margin-right: 8px; }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+    .stat-card { background: white; padding: 10px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-val { display: block; font-size: 1.2rem; font-weight: bold; color: var(--primary); }
+    .stat-label { font-size: 0.75rem; color: #7f8c8d; }
+    
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 5px; overflow: hidden; font-size: 0.85rem; }
+    th { background: #eee; padding: 8px; text-align: left; }
+    td { padding: 8px; border-bottom: 1px solid #eee; }
+    .bar-bg { background: #eee; height: 8px; border-radius: 4px; margin-top: 4px; overflow: hidden; }
+    .bar-fill { background: var(--primary); height: 100%; }
+
+    .input-with-cam { display: flex; gap: 8px; margin: 8px 0; }
+    .input-with-cam input { margin: 0; flex: 1; }
+    .camera-btn { background: #f0f3f5; border: 1px solid #ccc; border-radius: 4px; padding: 0 15px; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    
+    .report-table th { background: #34495e; color: white; padding: 6px; font-size: 0.75rem; text-align: center; }
+    .report-table td { padding: 6px; font-size: 0.85rem; border: 1px solid #eee; }
+    
+    .link-text { color: var(--primary); text-decoration: underline; cursor: pointer; font-size: 0.8rem; font-weight: normal; margin-left: 10px; }
+
+    /* ロード画面用 */
+    #global-loader { display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; justify-content:center; align-items:center; flex-direction:column; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-  <h2>GitHub Pages 稼働テスト</h2>
-  <p>ボタンを押すと、裏側でGASと通信してデータを送ります。</p>
+<div id="global-loader">
+  <div class="spinner"></div>
+  <div style="margin-top:15px; font-weight:bold; color:#333;" id="loader-text">通信中...</div>
+</div>
 
-  <button onclick="sendData()">GASへデータを送る！</button>
-  <div id="result"></div>
+<div class="header-container">
+  <h2>AMC生産管理 検査用</h2>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button onclick="refreshData()" style="padding:6px 12px; border:none; background:var(--primary); color:white; border-radius:4px; font-weight:bold; font-size:0.9rem;">↻ 最新化</button>
+    <img src="https://drive.google.com/thumbnail?id=1fyLzGFdhXwqrzxiHR_P5DsCE8QAzT75e&sz=w200" class="logo">
+  </div>
+</div>
 
-  <script>
-    // ★ここにステップ1で取得したGASのWebアプリURLを貼り付けます
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbz_8w3xfGrvx0vJ5hx0RYQi5l9B-Xnxsn0FK1NDkpknbLuiJAIwOYch9rDlKprxdpzJAA/exec";
+<div class="nav-tabs">
+  <div class="nav-item active" onclick="switchTab('input')">作業入力</div>
+  <div class="nav-item" onclick="switchTab('report')">工数確認</div>
+</div>
 
-    async function sendData() {
-      const resultArea = document.getElementById("result");
-      resultArea.style.color = "#333";
-      resultArea.innerText = "通信中...";
+<div id="input-tab" class="content active">
+  <div id="active-list"></div>
+  <div class="btn-row">
+    <button class="btn btn-new" onclick="showModal('new-modal')">＋ 新規検査</button>
+    <button class="btn btn-common" onclick="openCommonModal()">🕒 作業以外</button>
+  </div>
+</div>
 
-      // GASに送りたいデータ
-      const payload = { message: "こんにちは！GitHubの画面から送りました！" };
+<div id="report-tab" class="content">
+  <div class="stat-grid">
+    <div class="stat-card"><span id="sum-total" class="stat-val">0:00</span><span class="stat-label">当月合計工数</span></div>
+    <div class="stat-card"><span id="avg-case" class="stat-val">0:00</span><span class="stat-label">案件平均</span></div>
+    <div class="stat-card"><span id="max-case" class="stat-val">0:00</span><span class="stat-label">最大</span></div>
+    <div class="stat-card"><span id="min-case" class="stat-val">0:00</span><span class="stat-label">最小</span></div>
+  </div>
 
-      try {
-        // fetch関数でGASに向けて通信を行う
-        const response = await fetch(GAS_URL, {
-          method: "POST",
-          // ★ここが最大の裏技: application/jsonにするとCORSエラーになるので text/plain で送る！
-          headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify(payload)
-        });
+  <div class="card" style="border-left-color:var(--success)">
+    <div style="font-weight:bold; margin-bottom:8px;">検査員別 (検査＋作業以外) <span style="font-size:0.7rem; font-weight:normal; color:#999;">※当月集計</span></div>
+    <div id="inspector-report"></div>
+  </div>
 
-        // GASから返ってきた結果（JSON）を受け取る
-        const resultData = await response.json();
-        
-        if(resultData.success) {
-          resultArea.style.color = "#2ecc71";
-          resultArea.innerText = resultData.message;
-        } else {
-          resultArea.style.color = "#e74c3c";
-          resultArea.innerText = "エラー: " + resultData.error;
-        }
-      } catch(e) {
-        resultArea.style.color = "#e74c3c";
-        resultArea.innerText = "通信失敗: " + e.message;
+  <div class="card" style="border-left-color:var(--warning)">
+    <div style="font-weight:bold; margin-bottom:8px;">機種別 平均工数 <span style="font-size:0.7rem; font-weight:normal; color:#999;">※当月集計</span></div>
+    <div id="machine-report"></div>
+  </div>
+
+  <div class="card" style="border-left-color:#9b59b6">
+    <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; margin-bottom:8px;">
+      <div>案件番号別 詳細 <span style="font-size:0.7rem; font-weight:normal; color:#999;">※本日</span></div>
+      <div style="color:var(--primary); text-decoration:underline; cursor:pointer; font-size:0.8rem;" onclick="openCaseMonthlyModal()">（当月分表示）</div>
+    </div>
+    <div id="case-report"></div>
+  </div>
+</div>
+
+<div id="new-modal" class="modal"><div class="modal-content">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+    <h3 style="margin:0;">新規検査開始</h3>
+    <span class="link-text" onclick="fetchRetryList()">再検査リスト取得 ＞</span>
+  </div>
+  <div style="margin-bottom:15px;">
+    <span class="link-text" style="margin-left:0;" onclick="openMultiInspectionModal()">ライン作業用（複数台同時作業）＞</span>
+  </div>
+  
+  <label>機種名</label><select id="machine-select"></select>
+  <label>案件番号</label>
+  <div class="input-with-cam">
+    <input type="text" id="case-no" placeholder="番号を入力またはスキャン">
+    <button type="button" class="camera-btn" onclick="startLiveCamera('case-no')">📷</button>
+  </div>
+  <label>検査員名</label><select id="inspector-select"></select>
+  <button class="btn btn-new" onclick="handleStart()" style="margin-top:15px;">検査開始</button>
+  <button class="btn btn-pause" style="background:#ccc" onclick="closeModal('new-modal')">キャンセル</button>
+</div></div>
+
+<div id="multi-inspection-modal" class="modal"><div class="modal-content">
+  <h3 style="margin-top:0; margin-bottom:15px;">ライン作業用（複数台同時作業）</h3>
+  <label>機種名</label><select id="multi-machine-select"></select>
+  <label>検査員名</label><select id="multi-inspector-select"></select>
+  
+  <div style="margin-top:15px; margin-bottom:5px; font-weight:bold;">案件番号入力</div>
+  <div id="multi-case-container">
+    <div class="input-with-cam multi-case-row">
+      <span style="width:50px; line-height:40px; font-weight:bold; color:#666;">1台目</span>
+      <input type="text" id="multi-case-1" class="multi-case-input" placeholder="番号を入力またはスキャン">
+      <button type="button" class="camera-btn" onclick="startLiveCamera('multi-case-1')">📷</button>
+    </div>
+    <div class="input-with-cam multi-case-row">
+      <span style="width:50px; line-height:40px; font-weight:bold; color:#666;">2台目</span>
+      <input type="text" id="multi-case-2" class="multi-case-input" placeholder="番号を入力またはスキャン">
+      <button type="button" class="camera-btn" onclick="startLiveCamera('multi-case-2')">📷</button>
+    </div>
+    <div class="input-with-cam multi-case-row">
+      <span style="width:50px; line-height:40px; font-weight:bold; color:#666;">3台目</span>
+      <input type="text" id="multi-case-3" class="multi-case-input" placeholder="番号を入力またはスキャン">
+      <button type="button" class="camera-btn" onclick="startLiveCamera('multi-case-3')">📷</button>
+    </div>
+  </div>
+  <button class="btn btn-common" style="margin-top:10px;" onclick="addMultiCaseRow()">＋ 追加</button>
+  
+  <button class="btn btn-new" onclick="handleMultiStart()" style="margin-top:20px;">検査開始</button>
+  <button class="btn btn-pause" style="background:#ccc" onclick="closeModal('multi-inspection-modal')">キャンセル</button>
+</div></div>
+
+<div id="qr-modal" class="modal"><div class="modal-content" style="text-align:center;">
+  <h3 style="margin-top:0;">QRコード連続スキャン</h3>
+  <div id="live-qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; border-radius:8px; overflow:hidden;"></div>
+  <p style="font-size:1rem; font-weight:bold; color:#666; margin-top:15px; min-height:1.5rem;" id="qr-scan-msg">カメラ枠内にQRコードをかざしてください</p>
+  <button class="btn btn-pause" style="background:#ccc; margin-top:20px;" onclick="closeLiveCamera()">終了して戻る</button>
+</div></div>
+
+<div id="retry-list-modal" class="modal"><div class="modal-content">
+  <h3 style="margin-top:0; margin-bottom:15px;">再検査待ちリスト</h3>
+  <div id="retry-list-container" style="max-height:60vh; overflow-y:auto;"></div>
+  <button class="btn btn-pause" style="background:#ccc; margin-top:15px;" onclick="closeModal('retry-list-modal')">閉じる</button>
+</div></div>
+
+<div id="common-modal" class="modal"><div class="modal-content">
+  <h3>作業以外入力</h3>
+  <label>作業日</label>
+  <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:4px;">
+    <span id="common-date-display" style="font-weight:bold; font-size:1.1rem; color:var(--primary); min-width:80px; text-align:center;">当日分</span>
+    <input type="date" id="common-date-input" style="width:auto; flex:1; padding:8px; margin:0;" onchange="updateCommonDateDisplay()">
+  </div>
+  <div style="font-size:0.8rem; color:#d35400; margin-bottom:15px;">＊入力忘れ等で当日以外の入力の場合は<br>カレンダーから該当日を選択</div>
+  <label>検査員名</label><select id="common-inspector-select"></select>
+  <label>内容（複数選択可）</label>
+  <div class="check-grid">
+    <label class="check-item"><input type="checkbox" name="common-task" value="朝礼">朝礼</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="トイレ">トイレ</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="掃除or片付け">掃除or片付け</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="指導or教育">指導or教育</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="会議or打合せ">会議or打合せ</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="相談・共有">相談・共有</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="PC入力">PC入力</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="資料閲覧or作成">資料閲覧or作成</label>
+    <label class="check-item"><input type="checkbox" name="common-task" value="移動（本社⇔第二）">移動（本社⇔第二）</label>
+  </div>
+  <label>合計時間</label>
+  <div style="display:flex; align-items:center; gap:5px; margin: 8px 0;">
+    <select id="common-time-h" style="width:70px; padding:8px; text-align:center; font-size:1rem; border-radius:4px; border:1px solid #ccc;"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option></select>
+    <span style="font-weight:bold; font-size:18px;">:</span>
+    <select id="common-time-m10" style="width:70px; padding:8px; text-align:center; font-size:1rem; border-radius:4px; border:1px solid #ccc;"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
+    <select id="common-time-m1" style="width:70px; padding:8px; text-align:center; font-size:1rem; border-radius:4px; border:1px solid #ccc;"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option></select>
+  </div>
+  <label>備考欄</label><textarea id="common-remarks" rows="2"></textarea>
+  <button class="btn btn-new" onclick="handleCommonSubmit()">登録</button>
+  <button class="btn btn-pause" style="background:#ccc" onclick="closeModal('common-modal')">キャンセル</button>
+</div></div>
+
+<div id="resume-modal" class="modal"><div class="modal-content">
+  <h3>検査再開</h3>
+  <div id="current-inspector-display" style="background:#eee; padding:10px; text-align:center; font-weight:bold; margin-bottom:10px;"></div>
+  <label>検査員変更</label><select id="resume-inspector-select"></select>
+  <button class="btn" style="background:var(--success); color:white;" onclick="executeResume()">再開</button>
+  <button class="btn btn-pause" style="background:#ccc" onclick="closeModal('resume-modal')">キャンセル</button>
+</div></div>
+
+<div id="retry-modal" class="modal"><div class="modal-content">
+  <h3>再検査（不良登録）</h3>
+  <button class="btn btn-retry" onclick="executeRetry('メカ不良')">メカ不良</button>
+  <button class="btn btn-retry" style="background:#e67e22;" onclick="executeRetry('エレキ不良')">エレキ不良</button>
+  <button class="btn btn-pause" style="background:#ccc" onclick="closeModal('retry-modal')">キャンセル</button>
+</div></div>
+
+<div id="daily-report-modal" class="modal"><div class="modal-content" style="padding: 15px 10px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <button class="btn" style="width:auto; padding:6px 12px; margin:0; background:#95a5a6; color:white; font-size:0.85rem;" onclick="navReport(-1)">◀ 戻る</button>
+    <div style="text-align:center; line-height:1.3;">
+      <h3 id="modal-date-label" style="margin:0; font-size:1.05rem; color:#666;">日付: すべて</h3>
+      <span id="back-to-list" style="font-size:0.8rem; color:var(--primary); cursor:pointer; display:none; text-decoration:underline;" onclick="showMonthlyList()">一覧に戻る</span>
+    </div>
+    <button class="btn" style="width:auto; padding:6px 12px; margin:0; background:#95a5a6; color:white; font-size:0.85rem;" onclick="navReport(1)">進む ▶</button>
+  </div>
+  <div id="daily-report-name" style="font-weight:bold; margin-bottom:15px; font-size:1.3rem; color:var(--dark); text-align:center;"></div>
+  <div id="monthly-list-view">
+    <table class="report-table" id="monthly-report-table" style="width:100%; border-collapse:collapse; margin-bottom:15px;"></table>
+  </div>
+  <div id="daily-detail-view" style="display:none;">
+    <div style="font-weight:bold; margin-bottom:5px; border-bottom:2px solid var(--primary); padding-bottom:3px;">検査作業</div>
+    <table class="report-table" id="daily-report-ins-table" style="margin-bottom:15px; width:100%; border-collapse:collapse;"></table>
+    <div style="font-weight:bold; margin-bottom:5px; border-bottom:2px solid #95a5a6; padding-bottom:3px;">作業以外</div>
+    <table class="report-table" id="daily-report-com-table" style="margin-bottom:15px; width:100%; border-collapse:collapse;"></table>
+    <div style="text-align:right; font-weight:bold; font-size:1.2rem; color:var(--primary); background:#f0f3f5; padding:10px; border-radius:4px;">
+      工数合計：<span id="daily-report-total">0:00</span>
+    </div>
+  </div>
+  <button class="btn btn-pause" style="background:#ccc; margin-top:20px;" onclick="closeModal('daily-report-modal')">閉じる</button>
+</div></div>
+
+<div id="case-monthly-modal" class="modal"><div class="modal-content" style="padding: 15px 10px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+    <button class="btn" style="width:auto; padding:6px 12px; margin:0; background:#95a5a6;" onclick="navCaseMonth(-1)">◀ 戻る</button>
+    <h3 id="case-monthly-title" style="margin:0; font-size:1.1rem; color:#666;">案件番号別 詳細一覧</h3>
+    <button class="btn" style="width:auto; padding:6px 12px; margin:0; background:#95a5a6;" onclick="navCaseMonth(1)">進む ▶</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="report-table" id="case-monthly-table" style="width:100%; white-space:nowrap; border-collapse:collapse;">
+      <thead><tr><th>日付</th><th>案件番号</th><th>機種名</th><th>検査者</th><th>工数</th><th>再検</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <button class="btn btn-pause" style="background:#ccc; margin-top:20px;" onclick="closeModal('case-monthly-modal')">閉じる</button>
+</div></div>
+
+<script>
+  // =========================================================================
+  // ★重要：ここにコピーしたGASの「ウェブアプリのURL」を貼り付けてください！
+  // =========================================================================
+  const GAS_URL = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec";
+
+  // API通信用関数（fetchを使ってCORSを回避）
+  async function gasAPI(action, params = {}) {
+    showLoader("処理中...");
+    try {
+      const response = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: action, params: params })
+      });
+      const result = await response.json();
+      hideLoader();
+      if(result.success === false) {
+        alert("サーバーエラー: " + result.error);
       }
+      return result;
+    } catch(e) {
+      hideLoader();
+      alert("通信に失敗しました。電波状況を確認してください。\n" + e.message);
+      return { success: false, error: e.message };
     }
-  </script>
+  }
 
+  function showLoader(text) {
+    document.getElementById('loader-text').innerText = text;
+    document.getElementById('global-loader').style.display = 'flex';
+  }
+  function hideLoader() {
+    document.getElementById('global-loader').style.display = 'none';
+  }
+
+  // =========================================================================
+  // 状態管理変数
+  // =========================================================================
+  let MASTER_DATA = {};
+  let RESUME_TARGET_ID = null;
+  let RETRY_TARGET_ID = null;
+  let RETRY_COUNTS = JSON.parse(localStorage.getItem('retry_counts') || '{}');
+  
+  let currentReportName = "";
+  let currentViewDate = ""; 
+  let currentMonthlyData = null; 
+  let availableDates = [];
+  let currentCaseViewMonth = ""; 
+
+  const STATUS_LIST = [
+    { val: "機構目視", label: "機構目視" },
+    { val: "機種毎の確認事項", label: "機種毎の確認事項" },
+    { val: "入出金テスト", label: "入出金テスト" },
+    { val: "最終確認", label: "最終確認" }
+  ];
+
+  window.onload = () => {
+    gasAPI('getInitialData').then(data => {
+      if(!data.success) return;
+      MASTER_DATA = data;
+      renderOptions();
+      renderActiveList(data.activeInspections);
+    });
+  };
+
+  function renderOptions() {
+    const ids = ['machine-select', 'inspector-select', 'common-inspector-select', 'resume-inspector-select', 'multi-machine-select', 'multi-inspector-select'];
+    ids.forEach(id => {
+      const sel = document.getElementById(id);
+      if(!sel) return;
+      sel.innerHTML = "";
+      if(id.includes('machine')) MASTER_DATA.machines.forEach(m => sel.add(new Option(m, m)));
+      else MASTER_DATA.inspectors.forEach(i => sel.add(new Option(i, i)));
+    });
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(tab + '-tab').classList.add('active');
+    event.currentTarget.classList.add('active');
+    if(tab === 'report') loadReports();
+    else refreshData();
+  }
+
+  function refreshData() {
+    gasAPI('getActiveInspections').then(list => renderActiveList(list));
+  }
+
+  function renderActiveList(list) {
+    const container = document.getElementById('active-list');
+    if (!list || list.length === 0) {
+      container.innerHTML = "<div class='card' style='text-align:center; color:#999;'>進行中の検査はありません</div>";
+      return;
+    }
+    container.innerHTML = "";
+    
+    // グループ化
+    const groups = {};
+    list.forEach(item => {
+      if (item.groupId) {
+        if (!groups[item.groupId]) groups[item.groupId] = [];
+        groups[item.groupId].push(item);
+      }
+    });
+    const renderedGroups = new Set();
+    
+    list.forEach(item => {
+      let groupItems = [];
+      if (item.groupId) {
+        if (renderedGroups.has(item.groupId)) return;
+        renderedGroups.add(item.groupId);
+        groupItems = groups[item.groupId];
+      } else {
+        groupItems = [item];
+      }
+      
+      groupItems.forEach((gItem, idx) => {
+        const isRetryText = gItem.retryCount > 0 ? ` <span style="color:var(--danger); font-size:0.85em;">(再検査品 ${gItem.retryCount}回目)</span>` : "";
+        const isFinalStatus = gItem.status.includes("最終確認");
+        const displayStatus = gItem.status.replace("(調整)", "\n　調整").replace("(エージング)", "\nエージング");
+        
+        let titleText = `検査中${isRetryText}`;
+        if (gItem.state === '停止中') titleText = `【停止中】` + titleText;
+        if (gItem.groupTotal && gItem.groupTotal > 1) {
+          titleText = `検査中（${gItem.groupTotal}台目の${idx + 1}台目）${isRetryText}`;
+          if (gItem.state === '停止中') titleText = `【停止中】` + titleText;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        // 1台目 または 単体の場合はフルコントロール
+        if (idx === 0) {
+          card.innerHTML = `
+            <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:1.1rem;">${titleText}</div>
+            <div class="active-info" style="display:flex; flex-direction:column; gap:6px; font-size:1rem; margin-bottom:12px;">
+              <span>検査員: ${gItem.inspector}</span>
+              <span>機種名: ${gItem.machine}</span>
+              <span>案件番号: ${gItem.caseNo}</span>
+              <div class="status-badge" style="margin-top:6px;">${displayStatus}</div>
+            </div>
+            <div style="margin-bottom:10px;">
+              <select style="width:100%; padding:10px; font-size:1rem; border-radius:4px; border:1px solid #ccc; background-color:#fff;" onchange="handleChangeStatus('${gItem.id}', this)">
+                ${STATUS_LIST.map(s => `<option value="${s.val}" ${gItem.status === s.val ? 'selected' : ''}>${s.label}</option>`).join('')}
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-pause" onclick="handlePause('${gItem.id}', '${gItem.state}', '${gItem.inspector}')">${gItem.state==='停止中'?'再開':'一時停止'}</button>
+              <button class="btn btn-complete" onclick="handleComplete('${gItem.id}', ${isFinalStatus}, this)">検査完了</button>
+            </div>
+            <button class="btn btn-retry" style="font-size:0.8rem; padding:8px;" onclick="handleRetryRequest('${gItem.id}')">再検査(不良登録)</button>
+          `;
+        } else {
+          // 2台目以降は制限付き表示
+          card.innerHTML = `
+            <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:1.1rem;">${titleText}</div>
+            <div class="active-info" style="display:flex; flex-direction:column; gap:6px; font-size:1rem; margin-bottom:12px;">
+              <span>検査員: ${gItem.inspector}</span>
+              <span>機種名: ${gItem.machine}</span>
+              <span>案件番号: ${gItem.caseNo}</span>
+            </div>
+            <button class="btn btn-retry" style="font-size:0.8rem; padding:8px;" onclick="handleRetryRequest('${gItem.id}')">再検査(不良登録)</button>
+          `;
+        }
+        container.appendChild(card);
+      });
+    });
+  }
+
+  function fetchRetryList() {
+    gasAPI('getRetryList').then(res => {
+      const container = document.getElementById('retry-list-container');
+      showModal('retry-list-modal');
+      
+      if (!res.success) {
+        container.innerHTML = `<div style='color:red; text-align:center;'>エラー: ${res.error}</div>`;
+        return;
+      }
+      if (res.list.length === 0) {
+        container.innerHTML = "<div style='text-align:center; padding:15px; color:#666;'>再検査待ちの案件はありません</div>";
+        return;
+      }
+      
+      let html = "<div style='display:flex; flex-direction:column; gap:8px;'>";
+      res.list.forEach(item => {
+        html += `<div style="padding:10px; background:#fdf2e9; border:1px solid #f39c12; border-radius:4px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="selectRetryItem('${item.machine}', '${item.caseNo}')">
+          <div>
+            <div style="font-weight:bold; color:#d35400; font-size:1.1rem; margin-bottom:4px;">${item.caseNo}</div>
+            <div style="font-size:0.85rem; color:#666;">${item.machine} <span style="background:#e74c3c; color:white; padding:2px 6px; border-radius:4px; font-size:0.75rem; margin-left:4px;">${item.judge}</span></div>
+          </div>
+          <span style="color:var(--primary); font-size:0.85rem; font-weight:bold;">選択 ＞</span>
+        </div>`;
+      });
+      html += "</div>";
+      container.innerHTML = html;
+    });
+  }
+
+  function selectRetryItem(machine, caseNo) {
+    document.getElementById('machine-select').value = machine;
+    document.getElementById('case-no').value = caseNo;
+    closeModal('retry-list-modal');
+  }
+
+  function handleStart() {
+    const inspector = document.getElementById('inspector-select').value;
+    const machine = document.getElementById('machine-select').value;
+    const caseNo = document.getElementById('case-no').value.trim();
+    if(!caseNo) return alert("案件番号を入力してください");
+    closeModal('new-modal');
+    gasAPI('startNewInspection', {inspector, machine, caseNo, isRetry: RETRY_COUNTS[caseNo] || 0}).then(() => refreshData());
+  }
+
+  function openMultiInspectionModal() {
+    closeModal('new-modal');
+    showModal('multi-inspection-modal');
+  }
+
+  function addMultiCaseRow() {
+    const container = document.getElementById('multi-case-container');
+    const count = container.querySelectorAll('.multi-case-row').length + 1;
+    const uid = 'multi-case-' + count;
+    const div = document.createElement('div');
+    div.className = "input-with-cam multi-case-row";
+    div.innerHTML = `
+        <span style="width:50px; line-height:40px; font-weight:bold; color:#666;">${count}台目</span>
+        <input type="text" id="${uid}" class="multi-case-input" placeholder="番号を入力またはスキャン">
+        <button type="button" class="camera-btn" onclick="startLiveCamera('${uid}')">📷</button>
+    `;
+    container.appendChild(div);
+  }
+
+  function handleMultiStart() {
+    const inspector = document.getElementById('multi-inspector-select').value;
+    const machine = document.getElementById('multi-machine-select').value;
+    const inputs = document.querySelectorAll('.multi-case-input');
+    let caseNos = [];
+    let retryCounts = [];
+    
+    inputs.forEach(input => {
+      const val = input.value.trim();
+      if(val) {
+        caseNos.push(val);
+        retryCounts.push(RETRY_COUNTS[val] || 0);
+      }
+    });
+    
+    if(caseNos.length === 0) return alert("案件番号を1つ以上入力してください");
+    
+    closeModal('multi-inspection-modal');
+    gasAPI('startMultiInspections', {inspector, machine, caseNos, retryCounts}).then(() => refreshData());
+  }
+
+  function openCommonModal() { document.getElementById('common-date-input').value = ""; document.getElementById('common-date-display').innerText = "当日分"; showModal('common-modal'); }
+  function updateCommonDateDisplay() { const val = document.getElementById('common-date-input').value; document.getElementById('common-date-display').innerText = val ? val.replace(/-/g, '/') : "当日分"; }
+  
+  function handleCommonSubmit() {
+    const tasks = Array.from(document.querySelectorAll('input[name="common-task"]:checked')).map(c => c.value).join(', ');
+    const h = document.getElementById('common-time-h').value; const m10 = document.getElementById('common-time-m10').value; const m1 = document.getElementById('common-time-m1').value;
+    const time = `${h}:${m10}${m1}`; const targetDate = document.getElementById('common-date-input').value;
+    if (time === "0:00") return alert("合計時間を入力してください");
+    if (!tasks) return alert("内容を選択してください");
+    
+    gasAPI('saveNonWorkData', {
+      data: { inspector: document.getElementById('common-inspector-select').value, tasks: tasks, time: time, remarks: document.getElementById('common-remarks').value, targetDate: targetDate }
+    }).then(res => {
+      if(res.success) {
+        alert("登録完了"); 
+        document.querySelectorAll('input[name="common-task"]').forEach(c => c.checked = false);
+        document.getElementById('common-time-h').value = "0"; document.getElementById('common-time-m10').value = "0"; document.getElementById('common-time-m1').value = "0";
+        document.getElementById('common-remarks').value = ""; document.getElementById('common-date-input').value = ""; document.getElementById('common-date-display').innerText = "当日分";
+        closeModal('common-modal');
+      }
+    });
+  }
+
+  function handleChangeStatus(id, sel) { gasAPI('changeStatus', {id: id, newStatus: sel.value}).then(() => refreshData()); }
+  function handlePause(id, state, currentInspector) { 
+    if (state === '停止中') { 
+      RESUME_TARGET_ID = id; document.getElementById('current-inspector-display').innerText = "現在: " + currentInspector; 
+      document.getElementById('resume-inspector-select').value = currentInspector; showModal('resume-modal'); 
+    } else { 
+      gasAPI('pauseInspection', {id: id}).then(() => refreshData()); 
+    } 
+  }
+  function executeResume() { gasAPI('resumeInspection', {id: RESUME_TARGET_ID, newInspector: document.getElementById('resume-inspector-select').value}).then(() => { closeModal('resume-modal'); refreshData(); }); }
+  function handleComplete(id, isFinal, btn) { 
+    if (!isFinal && !confirm("最終確認まで終わっていませんが完了しますか？")) return; 
+    btn.innerText = "処理中..."; btn.disabled = true; 
+    gasAPI('completeInspection', {id: id}).then(res => { 
+      alert(`検査完了！\n\n【工数内訳】\n${res.breakdownList.join('\n')}\n--------------------\n検査時間合計：${res.manHours}`); refreshData(); 
+    }); 
+  }
+  function executeRetry(type) { 
+    if(!confirm(`${type}として再検査の登録を行います。よろしいですか？`)) return; 
+    gasAPI('registerRetry', {id: RETRY_TARGET_ID, type: type}).then(res => { 
+      if(res.success) { 
+        RETRY_COUNTS[res.caseNo] = res.nextRetry; localStorage.setItem('retry_counts', JSON.stringify(RETRY_COUNTS)); 
+        alert(`${type}として登録しました。\n\n【工数内訳】\n${res.breakdownList.join('\n')}\n--------------------\n検査時間合計：${res.manHours}`); 
+        closeModal('retry-modal'); refreshData(); 
+      } 
+    }); 
+  }
+  function handleRetryRequest(id) { RETRY_TARGET_ID = id; showModal('retry-modal'); }
+
+  // ================= 集計ロジック =================
+  function loadReports() {
+    const today = new Date().toISOString().split('T')[0];
+    const thisMonth = today.substring(0, 7); 
+    
+    document.getElementById('inspector-report').innerHTML = "<div style='text-align:center; padding:10px; color:#666;'>集計中...</div>";
+    document.getElementById('machine-report').innerHTML = "<div style='text-align:center; padding:10px; color:#666;'>集計中...</div>";
+    document.getElementById('case-report').innerHTML = "<div style='text-align:center; padding:10px; color:#666;'>集計中...</div>";
+
+    gasAPI('getReportData', {dateStr: thisMonth}).then(res => {
+      if(!res.success) return;
+      const ins = res.inspections; const com = res.commons;
+      CURRENT_REPORT_DATA = { ins: ins, com: com, date: thisMonth };
+      
+      let totalMin = 0; let mins = [];
+      ins.forEach(r => { let m = parseTime(r[10]); totalMin += m; mins.push(m); });
+      com.forEach(r => { if (MASTER_DATA.inspectors.includes(r[3])) totalMin += parseTime(r[6]); });
+      document.getElementById('sum-total').innerText = formatTime(totalMin);
+      document.getElementById('avg-case').innerText = mins.length ? formatTime(Math.round(totalMin/mins.length)) : "0:00";
+      document.getElementById('max-case').innerText = mins.length ? formatTime(Math.max(...mins)) : "0:00";
+      let validMins = mins.filter(m => m > 0);
+      document.getElementById('min-case').innerText = validMins.length > 0 ? formatTime(Math.min(...validMins)) : "0:00";
+
+      let inspectorsSet = new Set();
+      ins.forEach(r => { 
+          if(MASTER_DATA.inspectors.includes(r[2])) inspectorsSet.add(r[2]); 
+          (r[11]||"").split(',').forEach(it => { 
+              if(it.includes(':')) { let n = it.split(':')[0].trim(); if(MASTER_DATA.inspectors.includes(n)) inspectorsSet.add(n); }
+          }); 
+      });
+      com.forEach(r => { if(MASTER_DATA.inspectors.includes(r[3])) inspectorsSet.add(r[3]); });
+
+      let iHtml = "<div style='display:flex; flex-direction:column; gap:8px;'>";
+      Array.from(inspectorsSet).sort().forEach(name => {
+        iHtml += `<div style="padding:12px; background:#f8f9fa; border:1px solid #ddd; border-radius:4px; cursor:pointer; color:var(--primary); font-weight:bold; display:flex; justify-content:space-between; align-items:center;" onclick="openIndividualMonthlyReport('${name}')">
+          <span>${name}</span><span style="color:#999; font-size:0.8rem; background:#fff; padding:4px 8px; border-radius:12px; border:1px solid #ccc;">詳細を見る ＞</span>
+        </div>`;
+      });
+      if(inspectorsSet.size === 0) iHtml = "<div style='text-align:center; color:#999;'>データなし</div>";
+      document.getElementById('inspector-report').innerHTML = iHtml;
+
+      let mMap = {}; let mCnt = {};
+      ins.forEach(r => { mMap[r[3]] = (mMap[r[3]] || 0) + parseTime(r[10]); mCnt[r[3]] = (mCnt[r[3]] || 0) + 1; });
+      Object.keys(mMap).forEach(k => mMap[k] = Math.round(mMap[k]/mCnt[k]));
+      renderTable('machine-report', mMap, Math.max(...Object.values(mMap)));
+
+      let cMap = {}; let retryMap = {};
+      ins.filter(r => extractDate(r[0]) === today).forEach(r => { 
+        let key = `${r[4]}（${r[3]}）`; cMap[key] = (cMap[key] || 0) + parseTime(r[10]); retryMap[key] = Math.max(retryMap[key] || 0, parseInt(r[8], 10) || 0);
+      });
+      let finalCMap = {};
+      Object.keys(cMap).forEach(k => {
+        let rText = retryMap[k] > 0 ? ` <span style="color:red; font-size:0.75rem; font-weight:normal;">(再検${retryMap[k]})</span>` : "";
+        finalCMap[k + rText] = cMap[k];
+      });
+      renderTable('case-report', finalCMap, Math.max(...Object.values(finalCMap)));
+    });
+  }
+
+  function openCaseMonthlyModal() { const now = new Date(); currentCaseViewMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; showModal('case-monthly-modal'); renderCaseMonthly(); }
+  function navCaseMonth(delta) { let d = new Date(currentCaseViewMonth + "-01"); d.setMonth(d.getMonth() + delta); currentCaseViewMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; renderCaseMonthly(); }
+  
+  function renderCaseMonthly() {
+    const [year, month] = currentCaseViewMonth.split('-');
+    document.getElementById('case-monthly-title').innerText = `${parseInt(month)}月分 詳細一覧`;
+    const tbody = document.querySelector('#case-monthly-table tbody');
+    tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px;'>読み込み中...</td></tr>";
+
+    gasAPI('getReportData', {dateStr: currentCaseViewMonth}).then(res => {
+      if(!res.success) return;
+      let html = "";
+      if(res.inspections.length === 0) { html = "<tr><td colspan='6' style='text-align:center; padding:20px; color:#999;'>データなし</td></tr>"; } 
+      else {
+        res.inspections.sort((a,b) => new Date(b[0]) - new Date(a[0])).forEach(r => {
+          let inspectors = new Set(); inspectors.add(r[2]);
+          if(r[11]) r[11].split(',').forEach(item => { if(item.includes(':')) inspectors.add(item.split(':')[0].trim()); });
+          html += `<tr>
+            <td style="text-align:center;">${extractDate(r[0]).substring(5).replace('-','/')}</td>
+            <td>${r[4]}</td><td>${r[3]}</td><td style="font-size:0.75rem;">${Array.from(inspectors).join(', ')}</td>
+            <td style="text-align:right;">${formatTime(parseTime(r[10]))}</td><td style="text-align:center;">${r[8]||0}</td>
+          </tr>`;
+        });
+      }
+      tbody.innerHTML = html;
+    });
+  }
+
+  function openIndividualMonthlyReport(name) { currentReportName = name; const now = new Date(); currentViewDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; showModal('daily-report-modal'); updateMonthlyReportView(); }
+  function navReport(delta) {
+    if(currentViewDate.length === 7) { let d = new Date(currentViewDate + "-01"); d.setMonth(d.getMonth() + delta); currentViewDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; } 
+    else {
+      let idx = availableDates.indexOf(currentViewDate);
+      if(idx !== -1 && availableDates[idx + delta]) { currentViewDate = availableDates[idx + delta]; }
+      else { alert(delta > 0 ? "これ以上新しいデータはありません" : "これ以上古いデータはありません"); return; }
+    }
+    updateMonthlyReportView();
+  }
+
+  function updateMonthlyReportView() {
+    document.getElementById('daily-report-name').innerText = currentReportName; document.getElementById('modal-date-label').innerText = "読み込み中...";
+    gasAPI('getReportData', {dateStr: currentViewDate.substring(0,7)}).then(res => {
+      currentMonthlyData = res; let dates = new Set();
+      res.inspections.forEach(r => { if(r[2] === currentReportName || (r[11]||"").includes(currentReportName)) dates.add(extractDate(r[0])); });
+      res.commons.forEach(r => { if(r[3] === currentReportName) dates.add(extractDate(r[0])); });
+      availableDates = Array.from(dates).sort(); renderReportModal();
+    });
+  }
+
+  function renderReportModal() {
+    const isMonthly = (currentViewDate.length === 7);
+    const listV = document.getElementById('monthly-list-view'); const detailV = document.getElementById('daily-detail-view');
+    document.getElementById('modal-date-label').innerText = isMonthly ? "日付: すべて" : `日付: ${currentViewDate.replace(/-/g,'/')}`;
+    document.getElementById('back-to-list').style.display = isMonthly ? 'none' : 'inline';
+    
+    if(isMonthly) {
+      listV.style.display = 'block'; detailV.style.display = 'none';
+      let html = "<tr><th>日付</th><th>主な内容</th><th>合計工数</th></tr>";
+      availableDates.slice().reverse().forEach(d => {
+        let dayTotal = 0; let mainMachine = "";
+        currentMonthlyData.inspections.forEach(r => { if(extractDate(r[0]) === d && (r[2] === currentReportName || (r[11]||"").includes(currentReportName))) { dayTotal += parseTime(r[10]); mainMachine = r[3]; } });
+        currentMonthlyData.commons.forEach(r => { if(extractDate(r[0]) === d && r[3] === currentReportName) dayTotal += parseTime(r[6]); });
+        html += `<tr><td style="color:var(--primary); text-decoration:underline;" onclick="gotoDaily('${d}')">${d.substring(5).replace('-','/')}</td><td style="text-align:center;">${mainMachine||'作業以外'}</td><td style="text-align:right;">${formatTime(dayTotal)}</td></tr>`;
+      });
+      document.getElementById('monthly-report-table').innerHTML = html || "<tr><td colspan='3' style='text-align:center;'>データなし</td></tr>";
+    } else {
+      listV.style.display = 'none'; detailV.style.display = 'block';
+      let insHtml = "<tr><th>機種名</th><th>案件</th><th>工数</th></tr>"; let total = 0;
+      currentMonthlyData.inspections.filter(r => extractDate(r[0]) === currentViewDate).forEach(r => {
+        let myTime = 0;
+        if(r[11] && r[11].includes(currentReportName)) { r[11].split(',').forEach(item => { if(item.includes(currentReportName)) myTime += parseTime(item.split(':')[1].trim()); }); } 
+        else if(r[2] === currentReportName) { myTime = parseTime(r[10]); }
+        if(myTime > 0) { insHtml += `<tr><td style="text-align:center;">${r[3]}</td><td style="text-align:center;">${r[4]}</td><td style="text-align:right;">${formatTime(myTime)}</td></tr>`; total += myTime; }
+      });
+      document.getElementById('daily-report-ins-table').innerHTML = insHtml || "<tr><td colspan='3' style='text-align:center;'>データなし</td></tr>";
+      
+      let comHtml = "<tr><th>内容</th><th>工数</th></tr>";
+      currentMonthlyData.commons.filter(r => extractDate(r[0]) === currentViewDate && r[3] === currentReportName).forEach(r => { let t = parseTime(r[6]); comHtml += `<tr><td style="text-align:center;">${r[4]}</td><td style="text-align:right;">${formatTime(t)}</td></tr>`; total += t; });
+      document.getElementById('daily-report-com-table').innerHTML = comHtml || "<tr><td colspan='2' style='text-align:center;'>データなし</td></tr>";
+      document.getElementById('daily-report-total').innerText = formatTime(total);
+    }
+  }
+
+  function gotoDaily(d) { currentViewDate = d; renderReportModal(); }
+  function showMonthlyList() { currentViewDate = currentViewDate.substring(0, 7); renderReportModal(); }
+
+  function extractDate(s) { return s ? s.split(' ')[0].replace(/\//g, '-') : ""; }
+  function parseTime(s){ if(!s || !String(s).includes(':')) return 0; const p = String(s).split(':'); let h = parseInt(p[0],10)||0; let m = parseInt(p[1],10)||0; let sec = p[2] ? parseInt(p[2],10) : 0; if (sec >= 30) m += 1; return h * 60 + m; }
+  function formatTime(m) { m = Math.round(m); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; }
+  function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  function renderTable(id, map, max) { let html = "<table>"; Object.keys(map).sort().forEach(k => { let val = map[k]; let percent = max > 0 ? (val / max * 100) : 0; html += `<tr><td style="width:55%">${k}</td><td style="text-align:right; font-weight:bold;">${formatTime(val)}<div class="bar-bg"><div class="bar-fill" style="width:${percent}%"></div></div></td></tr>`; }); document.getElementById(id).innerHTML = html + "</table>"; }
+
+  // =========================================================================
+  // ★新設：ライブカメラ 連続スキャン処理
+  // =========================================================================
+  let html5QrCode = null;
+  let currentScanTargetId = null;
+  let scanMsgTimeout = null;
+
+  function startLiveCamera(targetId) {
+    currentScanTargetId = targetId;
+    document.getElementById('qr-modal').style.display = 'flex';
+    document.getElementById('qr-scan-msg').innerText = "カメラ枠内にQRコードをかざしてください";
+    document.getElementById('qr-scan-msg').style.color = "#666";
+    
+    html5QrCode = new Html5Qrcode("live-qr-reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText, decodedResult) => {
+        // スキャン成功時
+        playBeep();
+        document.getElementById(currentScanTargetId).value = decodedText;
+        
+        if (currentScanTargetId.startsWith('multi-case-')) {
+           // ライン作業用（連続スキャン）
+           clearTimeout(scanMsgTimeout);
+           document.getElementById('qr-scan-msg').innerText = `【${decodedText}】を読込！次をかざして下さい`;
+           document.getElementById('qr-scan-msg').style.color = "#2ecc71";
+           
+           let count = parseInt(currentScanTargetId.replace('multi-case-', ''));
+           let nextId = `multi-case-${count + 1}`;
+           if(!document.getElementById(nextId)) {
+              addMultiCaseRow(); 
+           }
+           currentScanTargetId = nextId; 
+           
+           scanMsgTimeout = setTimeout(() => {
+              document.getElementById('qr-scan-msg').innerText = "カメラ枠内に次のQRコードをかざしてください";
+              document.getElementById('qr-scan-msg').style.color = "#666";
+           }, 2000);
+        } else {
+           // 単体の場合は一度で閉じる
+           closeLiveCamera();
+        }
+      },
+      (errorMessage) => { /* 認識中は常に走るので無視 */ }
+    ).catch((err) => {
+      alert("カメラの起動に失敗しました: " + err);
+      closeLiveCamera();
+    });
+  }
+
+  function closeLiveCamera() {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+        document.getElementById('qr-modal').style.display = 'none';
+      }).catch(err => {
+        document.getElementById('qr-modal').style.display = 'none';
+      });
+    } else {
+      document.getElementById('qr-modal').style.display = 'none';
+    }
+  }
+
+  function playBeep() { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.setValueAtTime(1200, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.08); } catch(e) {} }
+
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { if (document.getElementById('input-tab').classList.contains('active')) refreshData(); else loadReports(); } });
+  setInterval(() => { const isAnyModalOpen = Array.from(document.querySelectorAll('.modal')).some(m => m.style.display === 'flex'); if (!isAnyModalOpen && document.getElementById('input-tab').classList.contains('active')) refreshData(); }, 30000);
+</script>
 </body>
 </html>
