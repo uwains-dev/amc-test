@@ -13,12 +13,12 @@
     h2 { font-size: 1.2rem; margin-top: 0; margin-bottom: 10px; color: #2c3e50; }
     
     /* モード切替周り */
-    .mode-control { margin-bottom: 15px; display: flex; justify-content: center; align-items: center; gap: 10px; }
-    .mode-badge { padding: 8px 15px; font-weight: bold; border-radius: 20px; font-size: 0.9rem; transition: 0.3s; }
+    .mode-control { margin-bottom: 15px; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .mode-badge { padding: 8px 12px; font-weight: bold; border-radius: 20px; font-size: 0.9rem; transition: 0.3s; }
     .mode-QR { background: #3498db; color: white; }
     .mode-ENG { background: #f1c40f; color: #333; }
     .mode-JPN { background: #e74c3c; color: white; }
-    .btn-switch { background: #95a5a6; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #7f8c8d; }
+    .btn-switch { background: #95a5a6; color: white; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #7f8c8d; }
     .btn-switch:active { transform: translateY(2px); box-shadow: 0 0 #7f8c8d; }
     
     /* カメラエリア */
@@ -28,8 +28,9 @@
     /* OCR用プレビューとガイド枠 */
     #ocr-container { display: none; position: relative; width: 100%; }
     #ocr-video { width: 100%; display: block; }
-    .ocr-guide { position: absolute; top: 44%; left: 10%; width: 80%; height: 12%; border: 3px solid #2ecc71; box-sizing: border-box; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none; }
-    .ocr-guide::before { content: 'この枠に文字を合わせる（1行）'; position: absolute; top: -25px; left: 0; width: 100%; text-align: center; color: #2ecc71; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px #000; }
+    /* ★枠のサイズをアニメーションで滑らかに変化させる */
+    .ocr-guide { position: absolute; left: 10%; width: 80%; border: 3px solid #2ecc71; box-sizing: border-box; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none; transition: all 0.3s ease; }
+    .ocr-guide::before { content: 'この枠に文字を合わせる'; position: absolute; top: -25px; left: 0; width: 100%; text-align: center; color: #2ecc71; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px #000; }
     
     .btn-capture { width: 100%; max-width: 500px; padding: 15px; background: #f39c12; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 15px; box-shadow: 0 4px #d35400; display: none; margin-left: auto; margin-right: auto; }
     .btn-capture:active { transform: translateY(2px); box-shadow: 0 2px #d35400; }
@@ -57,6 +58,7 @@
   <div class="mode-control">
     <span id="mode-badge" class="mode-badge mode-QR">QR爆速スキャン</span>
     <button class="btn-switch" onclick="toggleMode()">🔄 切替</button>
+    <button id="btn-frame" class="btn-switch" onclick="toggleFrameSize()" style="display:none; background:#8e44ad;">📏 枠:大</button>
   </div>
   
   <div class="camera-wrapper">
@@ -65,7 +67,7 @@
     </div>
     <div id="ocr-container">
       <video id="ocr-video" autoplay playsinline></video>
-      <div class="ocr-guide"></div>
+      <div id="ocr-guide" class="ocr-guide"></div>
     </div>
   </div>
 
@@ -89,6 +91,7 @@
 <script>
   let scannedValues = [];
   
+  // モード管理
   const MODES = [
     { id: 'QR', label: 'QR爆速スキャン', cls: 'mode-QR' },
     { id: 'ENG', label: '文字読取 (英数字)', cls: 'mode-ENG', lang: 'eng' },
@@ -96,39 +99,60 @@
   ];
   let currentModeIndex = 0;
 
+  // ★追加：フレームサイズ管理（大・中・小）
+  // top と height は % 指定です
+  const FRAME_SIZES = [
+    { label: '大', height: 12, top: 44 },
+    { label: '中', height: 8, top: 46 },
+    { label: '小', height: 5, top: 47.5 }
+  ];
+  let currentFrameIndex = 0;
+
+  // カメラ制御変数
   let html5QrCode = null;
   let ocrStream = null;
 
+  // 初期起動
   window.onload = () => {
+    updateFrameUI(); // フレーム初期化
     startQrCamera();
   };
 
+  // ----------------------------------------------------
+  // モード切り替え処理
+  // ----------------------------------------------------
   async function toggleMode() {
     const prevMode = MODES[currentModeIndex];
     document.getElementById('ocr-status').innerText = "";
     
+    // 現在のカメラを確実に停止する
     if (prevMode.id === 'QR') {
       await stopQrCamera();
     } else {
       stopOcrCamera();
     }
 
+    // 次のモードへ
     currentModeIndex = (currentModeIndex + 1) % MODES.length;
     const newMode = MODES[currentModeIndex];
     
+    // バッジのデザイン変更
     const badge = document.getElementById('mode-badge');
     badge.innerText = newMode.label;
     badge.className = `mode-badge ${newMode.cls}`;
 
+    // UIの切り替え
     if (newMode.id === 'QR') {
       document.getElementById('qr-container').style.display = 'block';
       document.getElementById('ocr-container').style.display = 'none';
       document.getElementById('btn-capture').style.display = 'none';
+      document.getElementById('btn-frame').style.display = 'none'; // 枠調整ボタン隠す
       startQrCamera();
     } else {
       document.getElementById('qr-container').style.display = 'none';
       document.getElementById('ocr-container').style.display = 'block';
       document.getElementById('btn-capture').style.display = 'block';
+      document.getElementById('btn-frame').style.display = 'inline-block'; // 枠調整ボタン表示
       startOcrCamera();
       
       if (newMode.id === 'JPN') {
@@ -137,6 +161,28 @@
     }
   }
 
+  // ----------------------------------------------------
+  // 枠サイズ切り替え処理
+  // ----------------------------------------------------
+  function toggleFrameSize() {
+    currentFrameIndex = (currentFrameIndex + 1) % FRAME_SIZES.length;
+    updateFrameUI();
+  }
+
+  function updateFrameUI() {
+    const size = FRAME_SIZES[currentFrameIndex];
+    document.getElementById('btn-frame').innerText = `📏 枠:${size.label}`;
+    
+    const guide = document.getElementById('ocr-guide');
+    if (guide) {
+      guide.style.height = `${size.height}%`;
+      guide.style.top = `${size.top}%`;
+    }
+  }
+
+  // ----------------------------------------------------
+  // QRスキャン関連
+  // ----------------------------------------------------
   function startQrCamera() {
     html5QrCode = new Html5Qrcode("reader");
     html5QrCode.start(
@@ -145,7 +191,7 @@
       (decodedText) => {
         processScan(decodedText);
       },
-      (errorMessage) => {} 
+      (errorMessage) => {} // 無視
     ).catch(err => {
       alert("カメラの起動に失敗しました。");
     });
@@ -158,6 +204,9 @@
     }
   }
 
+  // ----------------------------------------------------
+  // AI文字認識(OCR)関連
+  // ----------------------------------------------------
   async function startOcrCamera() {
     try {
       ocrStream = await navigator.mediaDevices.getUserMedia({
@@ -176,6 +225,7 @@
     }
   }
 
+  // 撮影して解析する
   async function captureAndOcr() {
     const video = document.getElementById('ocr-video');
     const canvas = document.getElementById('ocr-canvas');
@@ -188,24 +238,25 @@
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
+    
+    // ★現在のフレームサイズ設定を読み込んで座標を計算
+    const sizeConfig = FRAME_SIZES[currentFrameIndex];
     const cx = vw * 0.1;
-    const cy = vh * 0.44; 
+    const cy = vh * (sizeConfig.top / 100); 
     const cw = vw * 0.8;
-    const ch = vh * 0.12; 
+    const ch = vh * (sizeConfig.height / 100); 
 
-    // ★魔法1: 画数を潰さないために画像を内部で2倍に拡大
+    // 画数を潰さないために画像を内部で2倍に拡大
     canvas.width = cw * 2;
     canvas.height = ch * 2;
     ctx.drawImage(video, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
 
-    // ★魔法2: グレースケール＆コントラスト強調（白黒クッキリ化）
+    // グレースケール＆コントラスト強調（白黒クッキリ化）
     let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let pixels = imgData.data;
     for (let i = 0; i < pixels.length; i += 4) {
       let r = pixels[i], g = pixels[i+1], b = pixels[i+2];
-      // グレースケールに変換
       let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-      // 白黒のメリハリを強くする
       gray = gray > 140 ? 255 : (gray < 100 ? 0 : gray);
       pixels[i] = pixels[i+1] = pixels[i+2] = gray;
     }
@@ -216,7 +267,7 @@
     try {
       statusEl.innerText = "AIエンジン解析中...";
       
-      // ★魔法3: 1行専用モード(PSM: 7)を指定してAIの迷いを消す
+      // 1行専用モード(PSM: 7)を指定してAIの迷いを消す
       const worker = await Tesseract.createWorker(mode.lang, 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
@@ -227,11 +278,11 @@
         }
       });
       await worker.setParameters({
-        tessedit_pageseg_mode: 7 // SINGLE_LINE (1行専用モード)
+        tessedit_pageseg_mode: 7 
       });
       
       const result = await worker.recognize(canvas);
-      await worker.terminate(); // 終わったら解放
+      await worker.terminate(); 
       
       let text = result.data.text.replace(/\n/g, '').replace(/\s+/g, '').trim();
       
@@ -250,6 +301,9 @@
     btn.disabled = false;
   }
 
+  // ----------------------------------------------------
+  // リスト管理・音・送信ロジック
+  // ----------------------------------------------------
   function processScan(val) {
     if (scannedValues.includes(val)) {
       playBeep('error'); 
