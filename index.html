@@ -28,7 +28,6 @@
     /* OCR用プレビューとガイド枠 */
     #ocr-container { display: none; position: relative; width: 100%; }
     #ocr-video { width: 100%; display: block; }
-    /* ★修正：高さを12%に狭め、1行用のスリットに変更 */
     .ocr-guide { position: absolute; top: 44%; left: 10%; width: 80%; height: 12%; border: 3px solid #2ecc71; box-sizing: border-box; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none; }
     .ocr-guide::before { content: 'この枠に文字を合わせる（1行）'; position: absolute; top: -25px; left: 0; width: 100%; text-align: center; color: #2ecc71; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px #000; }
     
@@ -47,7 +46,6 @@
     .btn-register { width: 100%; padding: 15px; background: #2ecc71; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 20px; box-shadow: 0 4px #27ae60; }
     .btn-register:active { transform: translateY(2px); box-shadow: 0 2px #27ae60; }
     
-    /* ★追加：キャンセルボタン */
     .btn-cancel { width: 100%; padding: 15px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; box-shadow: 0 4px #7f8c8d; }
     .btn-cancel:active { transform: translateY(2px); box-shadow: 0 2px #7f8c8d; }
   </style>
@@ -86,13 +84,11 @@
   </div>
 
   <button class="btn-register" onclick="sendDataToParent()">一括登録して戻る</button>
-  
   <button class="btn-cancel" onclick="cancelScan()">キャンセル（閉じる）</button>
 
 <script>
   let scannedValues = [];
   
-  // モード管理
   const MODES = [
     { id: 'QR', label: 'QR爆速スキャン', cls: 'mode-QR' },
     { id: 'ENG', label: '文字読取 (英数字)', cls: 'mode-ENG', lang: 'eng' },
@@ -100,39 +96,30 @@
   ];
   let currentModeIndex = 0;
 
-  // カメラ制御変数
   let html5QrCode = null;
   let ocrStream = null;
 
-  // 初期起動（QRモード）
   window.onload = () => {
     startQrCamera();
   };
 
-  // ----------------------------------------------------
-  // モード切り替え処理
-  // ----------------------------------------------------
   async function toggleMode() {
     const prevMode = MODES[currentModeIndex];
     document.getElementById('ocr-status').innerText = "";
     
-    // 現在のカメラを確実に停止する
     if (prevMode.id === 'QR') {
       await stopQrCamera();
     } else {
       stopOcrCamera();
     }
 
-    // 次のモードへ
     currentModeIndex = (currentModeIndex + 1) % MODES.length;
     const newMode = MODES[currentModeIndex];
     
-    // バッジのデザイン変更
     const badge = document.getElementById('mode-badge');
     badge.innerText = newMode.label;
     badge.className = `mode-badge ${newMode.cls}`;
 
-    // UIの切り替え
     if (newMode.id === 'QR') {
       document.getElementById('qr-container').style.display = 'block';
       document.getElementById('ocr-container').style.display = 'none';
@@ -150,9 +137,6 @@
     }
   }
 
-  // ----------------------------------------------------
-  // QRスキャン関連
-  // ----------------------------------------------------
   function startQrCamera() {
     html5QrCode = new Html5Qrcode("reader");
     html5QrCode.start(
@@ -161,7 +145,7 @@
       (decodedText) => {
         processScan(decodedText);
       },
-      (errorMessage) => {} // 無視
+      (errorMessage) => {} 
     ).catch(err => {
       alert("カメラの起動に失敗しました。");
     });
@@ -174,9 +158,6 @@
     }
   }
 
-  // ----------------------------------------------------
-  // AI文字認識(OCR)関連
-  // ----------------------------------------------------
   async function startOcrCamera() {
     try {
       ocrStream = await navigator.mediaDevices.getUserMedia({
@@ -195,7 +176,6 @@
     }
   }
 
-  // 撮影して解析する
   async function captureAndOcr() {
     const video = document.getElementById('ocr-video');
     const canvas = document.getElementById('ocr-canvas');
@@ -206,26 +186,38 @@
     btn.disabled = true;
     statusEl.innerText = "画像を解析準備中...";
 
-    // ★修正：画面上のガイド枠（トップ44%、高さ12%）に合わせて画像を切り抜く
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     const cx = vw * 0.1;
-    const cy = vh * 0.44; // 1行スリットの位置
+    const cy = vh * 0.44; 
     const cw = vw * 0.8;
-    const ch = vh * 0.12; // 1行スリットの高さ
+    const ch = vh * 0.12; 
 
-    canvas.width = cw;
-    canvas.height = ch;
-    
-    // ガイド枠の部分だけをCanvasに描画
-    ctx.drawImage(video, cx, cy, cw, ch, 0, 0, cw, ch);
+    // ★魔法1: 画数を潰さないために画像を内部で2倍に拡大
+    canvas.width = cw * 2;
+    canvas.height = ch * 2;
+    ctx.drawImage(video, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
+
+    // ★魔法2: グレースケール＆コントラスト強調（白黒クッキリ化）
+    let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let pixels = imgData.data;
+    for (let i = 0; i < pixels.length; i += 4) {
+      let r = pixels[i], g = pixels[i+1], b = pixels[i+2];
+      // グレースケールに変換
+      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      // 白黒のメリハリを強くする
+      gray = gray > 140 ? 255 : (gray < 100 ? 0 : gray);
+      pixels[i] = pixels[i+1] = pixels[i+2] = gray;
+    }
+    ctx.putImageData(imgData, 0, 0);
     
     const mode = MODES[currentModeIndex];
     
     try {
-      statusEl.innerText = "AIエンジン解析中...(初回は少し時間がかかります)";
+      statusEl.innerText = "AIエンジン解析中...";
       
-      const result = await Tesseract.recognize(canvas, mode.lang, {
+      // ★魔法3: 1行専用モード(PSM: 7)を指定してAIの迷いを消す
+      const worker = await Tesseract.createWorker(mode.lang, 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
             statusEl.innerText = `文字を抽出中... ${Math.round(m.progress * 100)}%`;
@@ -234,9 +226,14 @@
           }
         }
       });
+      await worker.setParameters({
+        tessedit_pageseg_mode: 7 // SINGLE_LINE (1行専用モード)
+      });
       
-      // 改行などをスペースに変換して余分な空白を削除
-      let text = result.data.text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+      const result = await worker.recognize(canvas);
+      await worker.terminate(); // 終わったら解放
+      
+      let text = result.data.text.replace(/\n/g, '').replace(/\s+/g, '').trim();
       
       if (text) {
         statusEl.innerText = "解析成功！リストに追加しました。";
@@ -253,15 +250,12 @@
     btn.disabled = false;
   }
 
-  // ----------------------------------------------------
-  // リスト管理・音・送信ロジック
-  // ----------------------------------------------------
   function processScan(val) {
     if (scannedValues.includes(val)) {
-      playBeep('error'); // 重複時は低い音
+      playBeep('error'); 
       return;
     }
-    playBeep('success'); // 成功時は高い音
+    playBeep('success'); 
     scannedValues.push(val);
     updateUI();
   }
@@ -285,7 +279,6 @@
     }
 
     container.innerHTML = "";
-    // リストが下に伸びるのではなく、最新が上に来るように逆順で表示
     scannedValues.slice().reverse().forEach((val, reverseIndex) => {
       const actualIndex = scannedValues.length - 1 - reverseIndex;
       container.innerHTML += `
@@ -333,7 +326,6 @@
     window.close();
   }
 
-  // ★追加：キャンセル処理
   function cancelScan() {
     if (scannedValues.length > 0) {
       if (!confirm("読み取ったデータが破棄されます。キャンセルして戻りますか？")) {
