@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AMC ハイブリッド・スキャナー</title>
-  
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -12,7 +11,6 @@
     body { font-family: sans-serif; margin: 0; padding: 15px; background: #f4f7f6; color: #333; text-align: center; }
     h2 { font-size: 1.2rem; margin-top: 0; margin-bottom: 10px; color: #2c3e50; }
     
-    /* モード切替周り */
     .mode-control { margin-bottom: 15px; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
     .mode-badge { padding: 8px 12px; font-weight: bold; border-radius: 20px; font-size: 0.9rem; transition: 0.3s; }
     .mode-QR { background: #3498db; color: white; }
@@ -21,14 +19,11 @@
     .btn-switch { background: #95a5a6; color: white; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #7f8c8d; }
     .btn-switch:active { transform: translateY(2px); box-shadow: 0 0 #7f8c8d; }
     
-    /* カメラエリア */
     .camera-wrapper { position: relative; width: 100%; max-width: 500px; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     #reader { width: 100%; }
     
-    /* OCR用プレビューとガイド枠 */
     #ocr-container { display: none; position: relative; width: 100%; }
     #ocr-video { width: 100%; display: block; }
-    /* ★枠のサイズをアニメーションで滑らかに変化させる */
     .ocr-guide { position: absolute; left: 10%; width: 80%; border: 3px solid #2ecc71; box-sizing: border-box; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none; transition: all 0.3s ease; }
     .ocr-guide::before { content: 'この枠に文字を合わせる'; position: absolute; top: -25px; left: 0; width: 100%; text-align: center; color: #2ecc71; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px #000; }
     
@@ -37,7 +32,6 @@
     .btn-capture:disabled { background: #ccc; box-shadow: 0 4px #aaa; cursor: not-allowed; }
     #ocr-status { font-weight: bold; margin-top: 10px; color: #e67e22; min-height: 1.2em; font-size: 0.9rem; }
 
-    /* リスト部分 */
     .scan-list { margin-top: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: left; }
     .list-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; }
     .input-row { display: flex; margin-bottom: 10px; align-items: center; }
@@ -46,7 +40,6 @@
     
     .btn-register { width: 100%; padding: 15px; background: #2ecc71; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 20px; box-shadow: 0 4px #27ae60; }
     .btn-register:active { transform: translateY(2px); box-shadow: 0 2px #27ae60; }
-    
     .btn-cancel { width: 100%; padding: 15px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; box-shadow: 0 4px #7f8c8d; }
     .btn-cancel:active { transform: translateY(2px); box-shadow: 0 2px #7f8c8d; }
   </style>
@@ -62,9 +55,7 @@
   </div>
   
   <div class="camera-wrapper">
-    <div id="qr-container">
-      <div id="reader"></div>
-    </div>
+    <div id="qr-container"><div id="reader"></div></div>
     <div id="ocr-container">
       <video id="ocr-video" autoplay playsinline></video>
       <div id="ocr-guide" class="ocr-guide"></div>
@@ -90,8 +81,8 @@
 
 <script>
   let scannedValues = [];
+  let masterReferenceList = []; // ★追加：GASから受け取るマスタのリスト
   
-  // モード管理
   const MODES = [
     { id: 'QR', label: 'QR爆速スキャン', cls: 'mode-QR' },
     { id: 'ENG', label: '文字読取 (英数字)', cls: 'mode-ENG', lang: 'eng' },
@@ -99,8 +90,6 @@
   ];
   let currentModeIndex = 0;
 
-  // ★追加：フレームサイズ管理（大・中・小）
-  // top と height は % 指定です
   const FRAME_SIZES = [
     { label: '大', height: 12, top: 44 },
     { label: '中', height: 8, top: 46 },
@@ -108,150 +97,138 @@
   ];
   let currentFrameIndex = 0;
 
-  // カメラ制御変数
   let html5QrCode = null;
   let ocrStream = null;
 
-  // 初期起動
   window.onload = () => {
-    updateFrameUI(); // フレーム初期化
+    updateFrameUI();
     startQrCamera();
+    // ★追加：起動したら親画面(GAS)に「準備OK」を伝える
+    if (window.opener) {
+      window.opener.postMessage({ type: 'SCANNER_READY' }, "*");
+    }
   };
 
-  // ----------------------------------------------------
-  // モード切り替え処理
-  // ----------------------------------------------------
+  // ★追加：GAS画面からマスタのリストを受け取る
+  window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === 'SET_MASTER_LIST') {
+      masterReferenceList = event.data.list;
+      console.log("マスタリストを受信しました", masterReferenceList.length + "件");
+    }
+  });
+
   async function toggleMode() {
     const prevMode = MODES[currentModeIndex];
     document.getElementById('ocr-status').innerText = "";
-    
-    // 現在のカメラを確実に停止する
-    if (prevMode.id === 'QR') {
-      await stopQrCamera();
-    } else {
-      stopOcrCamera();
-    }
+    if (prevMode.id === 'QR') await stopQrCamera(); else stopOcrCamera();
 
-    // 次のモードへ
     currentModeIndex = (currentModeIndex + 1) % MODES.length;
     const newMode = MODES[currentModeIndex];
     
-    // バッジのデザイン変更
     const badge = document.getElementById('mode-badge');
     badge.innerText = newMode.label;
     badge.className = `mode-badge ${newMode.cls}`;
 
-    // UIの切り替え
     if (newMode.id === 'QR') {
       document.getElementById('qr-container').style.display = 'block';
       document.getElementById('ocr-container').style.display = 'none';
       document.getElementById('btn-capture').style.display = 'none';
-      document.getElementById('btn-frame').style.display = 'none'; // 枠調整ボタン隠す
+      document.getElementById('btn-frame').style.display = 'none';
       startQrCamera();
     } else {
       document.getElementById('qr-container').style.display = 'none';
       document.getElementById('ocr-container').style.display = 'block';
       document.getElementById('btn-capture').style.display = 'block';
-      document.getElementById('btn-frame').style.display = 'inline-block'; // 枠調整ボタン表示
+      document.getElementById('btn-frame').style.display = 'inline-block';
       startOcrCamera();
-      
-      if (newMode.id === 'JPN') {
-        document.getElementById('ocr-status').innerText = "※日本語の初回はAIデータのDLに少し時間がかかります";
-      }
+      if (newMode.id === 'JPN') document.getElementById('ocr-status').innerText = "※日本語の初回はAIデータのDLに少し時間がかかります";
     }
   }
 
-  // ----------------------------------------------------
-  // 枠サイズ切り替え処理
-  // ----------------------------------------------------
-  function toggleFrameSize() {
-    currentFrameIndex = (currentFrameIndex + 1) % FRAME_SIZES.length;
-    updateFrameUI();
-  }
-
+  function toggleFrameSize() { currentFrameIndex = (currentFrameIndex + 1) % FRAME_SIZES.length; updateFrameUI(); }
   function updateFrameUI() {
     const size = FRAME_SIZES[currentFrameIndex];
     document.getElementById('btn-frame').innerText = `📏 枠:${size.label}`;
-    
     const guide = document.getElementById('ocr-guide');
-    if (guide) {
-      guide.style.height = `${size.height}%`;
-      guide.style.top = `${size.top}%`;
-    }
+    if (guide) { guide.style.height = `${size.height}%`; guide.style.top = `${size.top}%`; }
   }
 
-  // ----------------------------------------------------
-  // QRスキャン関連
-  // ----------------------------------------------------
   function startQrCamera() {
     html5QrCode = new Html5Qrcode("reader");
-    html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      (decodedText) => {
-        processScan(decodedText);
-      },
-      (errorMessage) => {} // 無視
-    ).catch(err => {
-      alert("カメラの起動に失敗しました。");
-    });
+    html5QrCode.start( { facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => { processScan(decodedText); }, (errorMessage) => {} 
+    ).catch(err => { alert("カメラの起動に失敗しました。"); });
   }
 
   async function stopQrCamera() {
-    if (html5QrCode) {
-      try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){}
-      html5QrCode = null;
-    }
+    if (html5QrCode) { try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){} html5QrCode = null; }
   }
 
-  // ----------------------------------------------------
-  // AI文字認識(OCR)関連
-  // ----------------------------------------------------
   async function startOcrCamera() {
     try {
-      ocrStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
+      ocrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
       document.getElementById('ocr-video').srcObject = ocrStream;
-    } catch (err) {
-      alert("カメラの起動に失敗しました。");
-    }
+    } catch (err) { alert("カメラの起動に失敗しました。"); }
   }
 
   function stopOcrCamera() {
-    if (ocrStream) {
-      ocrStream.getTracks().forEach(t => t.stop());
-      ocrStream = null;
-    }
+    if (ocrStream) { ocrStream.getTracks().forEach(t => t.stop()); ocrStream = null; }
   }
 
-  // 撮影して解析する
+  // ★追加：ファジーマッチ（辞書と照らし合わせて一番近いものを探す）
+  function findBestMatch(ocrText) {
+    if (!masterReferenceList || masterReferenceList.length === 0) return ocrText; // リストがなければそのまま返す
+    
+    // 空白や全角半角のゆれを吸収するため、英数字は半角大文字に統一して比較
+    const cleanOcr = ocrText.replace(/[\s　]/g, '').toUpperCase();
+    if (!cleanOcr) return ocrText;
+
+    let bestMatch = ocrText;
+    let maxScore = 0;
+
+    for (let item of masterReferenceList) {
+      // 見出し等は除外
+      if (item.startsWith('＊')) continue;
+      
+      const cleanItem = item.replace(/[\s　]/g, '').toUpperCase();
+
+      // 完全一致 または 完全に含まれている場合は即採用！
+      if (cleanItem === cleanOcr || cleanItem.includes(cleanOcr) || cleanOcr.includes(cleanItem)) {
+        return item; // マスタの正式名称を返す
+      }
+
+      // 何文字一致しているかでスコアを計算（簡易的な類似度チェック）
+      let score = 0;
+      for (let i = 0; i < cleanOcr.length; i++) {
+        if (cleanItem.includes(cleanOcr[i])) score++;
+      }
+      let ratio = score / Math.max(cleanOcr.length, cleanItem.length);
+      
+      // 一定以上似ていれば候補として保持
+      if (ratio > maxScore && ratio > 0.4) {
+        maxScore = ratio;
+        bestMatch = item;
+      }
+    }
+    return bestMatch;
+  }
+
   async function captureAndOcr() {
     const video = document.getElementById('ocr-video');
     const canvas = document.getElementById('ocr-canvas');
     const ctx = canvas.getContext('2d');
     const statusEl = document.getElementById('ocr-status');
     const btn = document.getElementById('btn-capture');
-    
-    btn.disabled = true;
-    statusEl.innerText = "画像を解析準備中...";
+    btn.disabled = true; statusEl.innerText = "画像を解析準備中...";
 
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    
-    // ★現在のフレームサイズ設定を読み込んで座標を計算
+    const vw = video.videoWidth; const vh = video.videoHeight;
     const sizeConfig = FRAME_SIZES[currentFrameIndex];
-    const cx = vw * 0.1;
-    const cy = vh * (sizeConfig.top / 100); 
-    const cw = vw * 0.8;
-    const ch = vh * (sizeConfig.height / 100); 
+    const cx = vw * 0.1; const cy = vh * (sizeConfig.top / 100); 
+    const cw = vw * 0.8; const ch = vh * (sizeConfig.height / 100); 
 
-    // 画数を潰さないために画像を内部で2倍に拡大
-    canvas.width = cw * 2;
-    canvas.height = ch * 2;
+    canvas.width = cw * 2; canvas.height = ch * 2;
     ctx.drawImage(video, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
 
-    // グレースケール＆コントラスト強調（白黒クッキリ化）
     let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let pixels = imgData.data;
     for (let i = 0; i < pixels.length; i += 4) {
@@ -266,29 +243,23 @@
     
     try {
       statusEl.innerText = "AIエンジン解析中...";
-      
-      // 1行専用モード(PSM: 7)を指定してAIの迷いを消す
       const worker = await Tesseract.createWorker(mode.lang, 1, {
         logger: m => {
-          if (m.status === 'recognizing text') {
-            statusEl.innerText = `文字を抽出中... ${Math.round(m.progress * 100)}%`;
-          } else if (m.status.includes('loading')) {
-            statusEl.innerText = `AI辞書ロード中... ${Math.round(m.progress * 100)}%`;
-          }
+          if (m.status === 'recognizing text') statusEl.innerText = `文字を抽出中... ${Math.round(m.progress * 100)}%`;
+          else if (m.status.includes('loading')) statusEl.innerText = `AI辞書ロード中... ${Math.round(m.progress * 100)}%`;
         }
       });
-      await worker.setParameters({
-        tessedit_pageseg_mode: 7 
-      });
-      
+      await worker.setParameters({ tessedit_pageseg_mode: 7 });
       const result = await worker.recognize(canvas);
       await worker.terminate(); 
       
-      let text = result.data.text.replace(/\n/g, '').replace(/\s+/g, '').trim();
+      let rawText = result.data.text.replace(/\n/g, '').replace(/\s+/g, '').trim();
       
-      if (text) {
+      if (rawText) {
+        // ★追加：読み取った生データをマスタと照らし合わせて補正する
+        const correctedText = findBestMatch(rawText);
         statusEl.innerText = "解析成功！リストに追加しました。";
-        processScan(text);
+        processScan(correctedText);
       } else {
         statusEl.innerText = "文字が検出できませんでした。ピントを合わせて再度撮影してください。";
         playBeep('error');
@@ -297,41 +268,21 @@
       statusEl.innerText = "エラーが発生しました: " + e.message;
       playBeep('error');
     }
-    
     btn.disabled = false;
   }
 
-  // ----------------------------------------------------
-  // リスト管理・音・送信ロジック
-  // ----------------------------------------------------
   function processScan(val) {
-    if (scannedValues.includes(val)) {
-      playBeep('error'); 
-      return;
-    }
-    playBeep('success'); 
-    scannedValues.push(val);
-    updateUI();
+    if (scannedValues.includes(val)) { playBeep('error'); return; }
+    playBeep('success'); scannedValues.push(val); updateUI();
   }
 
-  function updateValue(index, newVal) {
-    scannedValues[index] = newVal;
-  }
-
-  function removeValue(index) {
-    scannedValues.splice(index, 1);
-    updateUI();
-  }
+  function updateValue(index, newVal) { scannedValues[index] = newVal; }
+  function removeValue(index) { scannedValues.splice(index, 1); updateUI(); }
 
   function updateUI() {
     const container = document.getElementById('result-list');
     document.getElementById('scan-count').innerText = scannedValues.length + " 件";
-    
-    if (scannedValues.length === 0) {
-      container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px 0;">QRをかざすか、文字を撮影してください</div>';
-      return;
-    }
-
+    if (scannedValues.length === 0) { container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px 0;">QRをかざすか、文字を撮影してください</div>'; return; }
     container.innerHTML = "";
     scannedValues.slice().reverse().forEach((val, reverseIndex) => {
       const actualIndex = scannedValues.length - 1 - reverseIndex;
@@ -346,46 +297,18 @@
   }
 
   function playBeep(type) {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      if (type === 'success') {
-        osc.frequency.setValueAtTime(1200, ctx.currentTime);
-        osc.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.1);
-      } else {
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.4);
-      }
-    } catch(e) {}
+    try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); osc.type = "sine"; if (type === 'success') { osc.frequency.setValueAtTime(1200, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1); } else { osc.frequency.setValueAtTime(300, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.4); } } catch(e) {}
   }
 
   function sendDataToParent() {
     const finalData = scannedValues.filter(v => v.trim() !== "");
-    
-    if (finalData.length === 0) {
-      if (!confirm("データがありません。終了して戻りますか？")) return;
-    }
-    
-    if (window.opener) {
-      window.opener.postMessage({
-        type: 'AMC_QR_SCAN_RESULT',
-        data: finalData
-      }, "*");
-    }
+    if (finalData.length === 0) { if (!confirm("データがありません。終了して戻りますか？")) return; }
+    if (window.opener) { window.opener.postMessage({ type: 'AMC_QR_SCAN_RESULT', data: finalData }, "*"); }
     window.close();
   }
 
   function cancelScan() {
-    if (scannedValues.length > 0) {
-      if (!confirm("読み取ったデータが破棄されます。キャンセルして戻りますか？")) {
-        return;
-      }
-    }
+    if (scannedValues.length > 0) { if (!confirm("読み取ったデータが破棄されます。キャンセルして戻りますか？")) { return; } }
     window.close();
   }
 </script>
