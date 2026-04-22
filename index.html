@@ -1,52 +1,120 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  // 1
   <meta charset="UTF-8">
+  // 2
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  // 3
   <title>AMC ハイブリッド・スキャナー</title>
+  
+  // 4
+  <link rel="icon" href="data:,">
+
+  // 5
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  // 6
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
+    /* 7 */
     body { font-family: sans-serif; margin: 0; padding: 15px; background: #f4f7f6; color: #333; text-align: center; }
-    h2 { font-size: 1.2rem; margin-top: 0; margin-bottom: 10px; color: #2c3e50; }
     
+    /* 8 */
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+      background: #fff;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    
+    /* 9 */
+    h2 { 
+      color: #2c3e50; 
+      margin: 0; 
+      font-size: 1.1rem; 
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    
+    /* 10 */
+    .logo {
+      height: 60px; /* モバイル向けに少し調整 */
+      width: auto;
+    }
+    
+    /* 11 */
     .mode-control { margin-bottom: 15px; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
+    /* 12 */
     .mode-badge { padding: 8px 12px; font-weight: bold; border-radius: 20px; font-size: 0.9rem; transition: 0.3s; }
+    /* 13 */
     .mode-QR { background: #3498db; color: white; }
+    /* 14 */
     .mode-ENG { background: #f1c40f; color: #333; }
+    /* 15 */
     .mode-JPN { background: #e74c3c; color: white; }
+    /* 16 */
     .btn-switch { background: #95a5a6; color: white; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #7f8c8d; }
+    /* 17 */
     .btn-switch:active { transform: translateY(2px); box-shadow: 0 0 #7f8c8d; }
     
+    /* 18 */
     .camera-wrapper { position: relative; width: 100%; max-width: 500px; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    /* 19 */
     #reader { width: 100%; }
     
+    /* 20 */
     #ocr-container { display: none; position: relative; width: 100%; }
+    /* 21 */
     #ocr-video { width: 100%; display: block; }
+    /* 22 */
     .ocr-guide { position: absolute; left: 10%; width: 80%; border: 3px solid #2ecc71; box-sizing: border-box; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none; transition: all 0.3s ease; }
+    /* 23 */
     .ocr-guide::before { content: 'この枠に文字を合わせる'; position: absolute; top: -25px; left: 0; width: 100%; text-align: center; color: #2ecc71; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px #000; }
     
+    /* 24 */
     .btn-capture { width: 100%; max-width: 500px; padding: 15px; background: #f39c12; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 15px; box-shadow: 0 4px #d35400; display: none; margin-left: auto; margin-right: auto; }
+    /* 25 */
     .btn-capture:active { transform: translateY(2px); box-shadow: 0 2px #d35400; }
+    /* 26 */
     .btn-capture:disabled { background: #ccc; box-shadow: 0 4px #aaa; cursor: not-allowed; }
+    /* 27 */
     #ocr-status { font-weight: bold; margin-top: 10px; color: #e67e22; min-height: 1.2em; font-size: 0.9rem; }
 
+    /* 28 */
     .scan-list { margin-top: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: left; }
+    /* 29 */
     .list-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; }
+    /* 30 */
     .input-row { display: flex; margin-bottom: 10px; align-items: center; }
+    /* 31 */
     .input-row input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    /* 32 */
     .input-row button { margin-left: 8px; background: #e74c3c; color: white; border: none; border-radius: 4px; width: 45px; cursor: pointer; font-weight: bold; font-size: 1.2rem; }
     
+    /* 33 */
     .btn-register { width: 100%; padding: 15px; background: #2ecc71; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 20px; box-shadow: 0 4px #27ae60; }
+    /* 34 */
     .btn-register:active { transform: translateY(2px); box-shadow: 0 2px #27ae60; }
+    /* 35 */
     .btn-cancel { width: 100%; padding: 15px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; box-shadow: 0 4px #7f8c8d; }
+    /* 36 */
     .btn-cancel:active { transform: translateY(2px); box-shadow: 0 2px #7f8c8d; }
   </style>
 </head>
 <body>
 
-  <h2>AMC ハイブリッド・スキャナー</h2>
+  <div class="container">
+    <div class="header-container">
+      <h2>AMC ハイブリッド・スキャナー</h2>
+      <img src="https://drive.google.com/thumbnail?id=1fyLzGFdhXwqrzxiHR_P5DsCE8QAzT75e&sz=w200" class="logo" alt="会社ロゴ">
+    </div>
+  </div>
   
   <div class="mode-control">
     <span id="mode-badge" class="mode-badge mode-QR">QR爆速スキャン</span>
@@ -80,36 +148,44 @@
   <button class="btn-cancel" onclick="cancelScan()">キャンセル（閉じる）</button>
 
 <script>
+  // 37
   let scannedValues = [];
-  let masterReferenceList = []; // ★追加：GASから受け取るマスタのリスト
+  // 38
+  let masterReferenceList = []; 
   
+  // 39
   const MODES = [
     { id: 'QR', label: 'QR爆速スキャン', cls: 'mode-QR' },
     { id: 'ENG', label: '文字読取 (英数字)', cls: 'mode-ENG', lang: 'eng' },
     { id: 'JPN', label: '文字読取 (日本語)', cls: 'mode-JPN', lang: 'jpn+eng' }
   ];
+  // 40
   let currentModeIndex = 0;
 
+  // 41
   const FRAME_SIZES = [
     { label: '大', height: 12, top: 44 },
     { label: '中', height: 8, top: 46 },
     { label: '小', height: 5, top: 47.5 }
   ];
+  // 42
   let currentFrameIndex = 0;
 
+  // 43
   let html5QrCode = null;
+  // 44
   let ocrStream = null;
 
+  // 45
   window.onload = () => {
     updateFrameUI();
     startQrCamera();
-    // ★追加：起動したら親画面(GAS)に「準備OK」を伝える
     if (window.opener) {
       window.opener.postMessage({ type: 'SCANNER_READY' }, "*");
     }
   };
 
-  // ★追加：GAS画面からマスタのリストを受け取る
+  // 46
   window.addEventListener("message", (event) => {
     if (event.data && event.data.type === 'SET_MASTER_LIST') {
       masterReferenceList = event.data.list;
@@ -117,6 +193,7 @@
     }
   });
 
+  // 47
   async function toggleMode() {
     const prevMode = MODES[currentModeIndex];
     document.getElementById('ocr-status').innerText = "";
@@ -145,7 +222,10 @@
     }
   }
 
+  // 48
   function toggleFrameSize() { currentFrameIndex = (currentFrameIndex + 1) % FRAME_SIZES.length; updateFrameUI(); }
+  
+  // 49
   function updateFrameUI() {
     const size = FRAME_SIZES[currentFrameIndex];
     document.getElementById('btn-frame').innerText = `📏 枠:${size.label}`;
@@ -153,6 +233,7 @@
     if (guide) { guide.style.height = `${size.height}%`; guide.style.top = `${size.top}%`; }
   }
 
+  // 50
   function startQrCamera() {
     html5QrCode = new Html5Qrcode("reader");
     html5QrCode.start( { facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -160,10 +241,12 @@
     ).catch(err => { alert("カメラの起動に失敗しました。"); });
   }
 
+  // 51
   async function stopQrCamera() {
     if (html5QrCode) { try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){} html5QrCode = null; }
   }
 
+  // 52
   async function startOcrCamera() {
     try {
       ocrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
@@ -171,40 +254,29 @@
     } catch (err) { alert("カメラの起動に失敗しました。"); }
   }
 
+  // 53
   function stopOcrCamera() {
     if (ocrStream) { ocrStream.getTracks().forEach(t => t.stop()); ocrStream = null; }
   }
 
-  // ★追加：ファジーマッチ（辞書と照らし合わせて一番近いものを探す）
+  // 54
   function findBestMatch(ocrText) {
-    if (!masterReferenceList || masterReferenceList.length === 0) return ocrText; // リストがなければそのまま返す
-    
-    // 空白や全角半角のゆれを吸収するため、英数字は半角大文字に統一して比較
+    if (!masterReferenceList || masterReferenceList.length === 0) return ocrText;
     const cleanOcr = ocrText.replace(/[\s　]/g, '').toUpperCase();
     if (!cleanOcr) return ocrText;
-
     let bestMatch = ocrText;
     let maxScore = 0;
-
     for (let item of masterReferenceList) {
-      // 見出し等は除外
       if (item.startsWith('＊')) continue;
-      
       const cleanItem = item.replace(/[\s　]/g, '').toUpperCase();
-
-      // 完全一致 または 完全に含まれている場合は即採用！
       if (cleanItem === cleanOcr || cleanItem.includes(cleanOcr) || cleanOcr.includes(cleanItem)) {
-        return item; // マスタの正式名称を返す
+        return item;
       }
-
-      // 何文字一致しているかでスコアを計算（簡易的な類似度チェック）
       let score = 0;
       for (let i = 0; i < cleanOcr.length; i++) {
         if (cleanItem.includes(cleanOcr[i])) score++;
       }
       let ratio = score / Math.max(cleanOcr.length, cleanItem.length);
-      
-      // 一定以上似ていれば候補として保持
       if (ratio > maxScore && ratio > 0.4) {
         maxScore = ratio;
         bestMatch = item;
@@ -213,6 +285,7 @@
     return bestMatch;
   }
 
+  // 55
   async function captureAndOcr() {
     const video = document.getElementById('ocr-video');
     const canvas = document.getElementById('ocr-canvas');
@@ -220,15 +293,12 @@
     const statusEl = document.getElementById('ocr-status');
     const btn = document.getElementById('btn-capture');
     btn.disabled = true; statusEl.innerText = "画像を解析準備中...";
-
     const vw = video.videoWidth; const vh = video.videoHeight;
     const sizeConfig = FRAME_SIZES[currentFrameIndex];
     const cx = vw * 0.1; const cy = vh * (sizeConfig.top / 100); 
     const cw = vw * 0.8; const ch = vh * (sizeConfig.height / 100); 
-
     canvas.width = cw * 2; canvas.height = ch * 2;
     ctx.drawImage(video, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
-
     let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let pixels = imgData.data;
     for (let i = 0; i < pixels.length; i += 4) {
@@ -238,9 +308,7 @@
       pixels[i] = pixels[i+1] = pixels[i+2] = gray;
     }
     ctx.putImageData(imgData, 0, 0);
-    
     const mode = MODES[currentModeIndex];
-    
     try {
       statusEl.innerText = "AIエンジン解析中...";
       const worker = await Tesseract.createWorker(mode.lang, 1, {
@@ -252,33 +320,35 @@
       await worker.setParameters({ tessedit_pageseg_mode: 7 });
       const result = await worker.recognize(canvas);
       await worker.terminate(); 
-      
       let rawText = result.data.text.replace(/\n/g, '').replace(/\s+/g, '').trim();
-      
       if (rawText) {
-        // ★追加：読み取った生データをマスタと照らし合わせて補正する
         const correctedText = findBestMatch(rawText);
-        statusEl.innerText = "解析成功！リストに追加しました。";
+        statusEl.innerText = "解析成功！";
         processScan(correctedText);
       } else {
-        statusEl.innerText = "文字が検出できませんでした。ピントを合わせて再度撮影してください。";
+        statusEl.innerText = "文字が検出できませんでした。";
         playBeep('error');
       }
     } catch(e) {
-      statusEl.innerText = "エラーが発生しました: " + e.message;
+      statusEl.innerText = "エラー: " + e.message;
       playBeep('error');
     }
     btn.disabled = false;
   }
 
+  // 56
   function processScan(val) {
     if (scannedValues.includes(val)) { playBeep('error'); return; }
     playBeep('success'); scannedValues.push(val); updateUI();
   }
 
+  // 57
   function updateValue(index, newVal) { scannedValues[index] = newVal; }
+  
+  // 58
   function removeValue(index) { scannedValues.splice(index, 1); updateUI(); }
 
+  // 59
   function updateUI() {
     const container = document.getElementById('result-list');
     document.getElementById('scan-count').innerText = scannedValues.length + " 件";
@@ -296,19 +366,22 @@
     });
   }
 
+  // 60
   function playBeep(type) {
     try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); osc.type = "sine"; if (type === 'success') { osc.frequency.setValueAtTime(1200, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1); } else { osc.frequency.setValueAtTime(300, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.4); } } catch(e) {}
   }
 
+  // 61
   function sendDataToParent() {
     const finalData = scannedValues.filter(v => v.trim() !== "");
-    if (finalData.length === 0) { if (!confirm("データがありません。終了して戻りますか？")) return; }
+    if (finalData.length === 0) { if (!confirm("データがありません。戻りますか？")) return; }
     if (window.opener) { window.opener.postMessage({ type: 'AMC_QR_SCAN_RESULT', data: finalData }, "*"); }
     window.close();
   }
 
+  // 62
   function cancelScan() {
-    if (scannedValues.length > 0) { if (!confirm("読み取ったデータが破棄されます。キャンセルして戻りますか？")) { return; } }
+    if (scannedValues.length > 0) { if (!confirm("読み取ったデータが破棄されます。戻りますか？")) { return; } }
     window.close();
   }
 </script>
