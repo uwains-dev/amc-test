@@ -322,12 +322,28 @@
     try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); osc.type = "sine"; if (type === 'success') { osc.frequency.setValueAtTime(1200, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1); } else { osc.frequency.setValueAtTime(300, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.4); } } catch(e) {}
   }
 
-  // 61
+// 61
   function sendDataToParent() {
     const finalData = scannedValues.filter(v => v.trim() !== "");
     if (finalData.length === 0) { if (!confirm("データがありません。戻りますか？")) return; }
-    if (window.opener) { window.opener.postMessage({ type: 'AMC_QR_SCAN_RESULT', data: finalData }, "*"); }
-    window.close();
+    
+    if (window.opener) {
+      // 元の仕様通りのデータ形式
+      const payload = { type: 'AMC_QR_SCAN_RESULT', data: finalData };
+      
+      // 親ウィンドウに送信（他のアプリはこれで動く）
+      window.opener.postMessage(payload, "*");
+      
+      // GASのiframe（子画面）にも送信（GASを動かすための追加）
+      for (let i = 0; i < window.opener.frames.length; i++) {
+        try { window.opener.frames[i].postMessage(payload, "*"); } catch(e) {}
+      }
+      
+      // 0.15秒待ってから閉じる
+      setTimeout(() => { window.close(); }, 150);
+    } else {
+      window.close();
+    }
   }
 
   // 62
